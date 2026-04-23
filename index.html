@@ -44,6 +44,19 @@
 
 <style>
   /* =========================================================
+     Flaggen-Emoji-Polyfill (Windows zeigt sonst nur "DE" statt 🇩🇪).
+     Die "Twemoji Country Flags"-Font ist per unicode-range auf die
+     Regional-Indicator-Symbols beschränkt – andere Emojis bleiben nativ.
+     ========================================================= */
+  @font-face {
+    font-family: "Twemoji Country Flags";
+    unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067,
+                   U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F;
+    src: url("https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1/dist/TwemojiCountryFlags.woff2") format("woff2");
+    font-display: swap;
+  }
+
+  /* =========================================================
      Design-Tokens (CSS-Variablen) – modernes, klares Design
      ========================================================= */
   :root {
@@ -78,7 +91,8 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: "Twemoji Country Flags", -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
     line-height: 1.5;
@@ -266,8 +280,26 @@
     font-size: 0.85rem;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 6px;
   }
+  .recipe-card .meta .course-tag {
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  /* Drei-Spalten-Meta: Portionen links, Sterne mittig, Zeit rechts. */
+  .recipe-card .meta-triple {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .recipe-card .meta-triple > :nth-child(1) { text-align: left; }
+  .recipe-card .meta-triple > :nth-child(2) { text-align: center; }
+  .recipe-card .meta-triple > :nth-child(3) { text-align: right; }
   .fav-btn {
     position: absolute;
     top: 8px;
@@ -441,6 +473,86 @@
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(-10px); }
 
   .hidden { display: none !important; }
+
+  /* =========================================================
+     Sterne-Bewertung (1–3)
+     ========================================================= */
+  .stars-picker {
+    display: inline-flex;
+    gap: 4px;
+    font-size: 1.7rem;
+    user-select: none;
+    line-height: 1;
+  }
+  .stars-picker .star {
+    cursor: pointer;
+    color: #d1d5db;
+    transition: transform 0.12s, color 0.12s;
+  }
+  .stars-picker .star:hover { transform: scale(1.15); }
+  .stars-picker .star.filled { color: #facc15; }
+
+  .rating-display {
+    color: #facc15;
+    font-size: 0.95rem;
+    letter-spacing: 1px;
+    line-height: 1;
+  }
+  .rating-display .empty { color: #d1d5db; }
+
+  /* Flaggen-Quick-Filter-Leiste */
+  .flag-filter {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 4px 0 10px 0;
+    margin-bottom: 14px;
+    scrollbar-width: thin;
+  }
+  .flag-chip {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .flag-chip:hover {
+    background: var(--surface-2);
+    transform: translateY(-1px);
+  }
+  .flag-chip.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+  }
+
+  /* Nährwerte-Grid */
+  .nutrition-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 8px;
+  }
+  .nutrition-cell {
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+  }
+  .nutrition-cell .n-label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .nutrition-cell .n-value {
+    font-weight: 600;
+    font-size: 1rem;
+  }
 </style>
 </head>
 <body>
@@ -474,6 +586,12 @@
     </label>
   </div>
 
+  <!-- Flaggen-Schnellfilter -->
+  <div id="flagQuickFilter" class="flag-filter hidden"></div>
+
+  <!-- Gänge-Schnellfilter -->
+  <div id="courseQuickFilter" class="flag-filter"></div>
+
   <!-- Rezeptliste -->
   <div id="recipeList"></div>
 
@@ -492,6 +610,24 @@
       <button class="btn btn-ghost btn-icon" data-close="editModal">✕</button>
     </div>
     <div class="modal-body">
+      <!-- Chefkoch-Import -->
+      <div class="form-group">
+        <label>🌐 Aus Chefkoch.de importieren</label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <input type="url" id="chefkochUrl"
+                 placeholder="https://www.chefkoch.de/rezepte/..."
+                 style="flex:1; min-width:200px;" />
+          <button type="button" class="btn btn-primary" id="chefkochImportBtn">Importieren</button>
+          <button type="button" class="btn" id="chefkochHtmlBtn" title="Fallback: HTML-Quelltext einfügen">HTML einfügen</button>
+        </div>
+        <div id="chefkochHtmlWrap" class="hidden" style="margin-top:8px;">
+          <textarea id="chefkochHtml" rows="5"
+                    placeholder="Chefkoch-Seitenquelltext hier einfügen (Rechtsklick → Seitenquelltext anzeigen, alles kopieren)"></textarea>
+          <button type="button" class="btn" id="chefkochHtmlParseBtn" style="margin-top:6px;">Aus HTML übernehmen</button>
+        </div>
+        <div class="ocr-status" id="chefkochStatus"></div>
+      </div>
+
       <!-- OCR / Drag & Drop Bereich -->
       <div class="form-group">
         <label data-i18n="importFromPhoto">📷 Aus Foto oder PDF importieren (OCR)</label>
@@ -521,24 +657,111 @@
                  placeholder="z.B. Italien, Deutschland..." />
           <datalist id="countryList">
             <option value="Deutschland">
+            <option value="Österreich">
+            <option value="Schweiz">
             <option value="Italien">
             <option value="Frankreich">
             <option value="Spanien">
+            <option value="Portugal">
             <option value="Griechenland">
+            <option value="Niederlande">
+            <option value="Belgien">
+            <option value="Großbritannien">
+            <option value="Irland">
+            <option value="Schweden">
+            <option value="Norwegen">
+            <option value="Dänemark">
+            <option value="Finnland">
+            <option value="Polen">
+            <option value="Tschechien">
+            <option value="Slowakei">
+            <option value="Ungarn">
+            <option value="Rumänien">
+            <option value="Russland">
+            <option value="Ukraine">
             <option value="Türkei">
+            <option value="Libanon">
+            <option value="Israel">
+            <option value="Iran">
+            <option value="Marokko">
+            <option value="Tunesien">
+            <option value="Ägypten">
+            <option value="Südafrika">
             <option value="Indien">
             <option value="China">
             <option value="Japan">
+            <option value="Korea">
             <option value="Thailand">
-            <option value="Mexiko">
+            <option value="Vietnam">
+            <option value="Indonesien">
             <option value="USA">
-            <option value="Österreich">
-            <option value="Schweiz">
-            <option value="Polen">
-            <option value="Ungarn">
-            <option value="Marokko">
-            <option value="Libanon">
+            <option value="Kanada">
+            <option value="Mexiko">
+            <option value="Brasilien">
+            <option value="Argentinien">
+            <option value="Peru">
+            <option value="Australien">
           </datalist>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Quelle (URL, optional)</label>
+        <input type="url" id="f_source" placeholder="https://www.chefkoch.de/rezepte/..." />
+      </div>
+
+      <div class="form-group">
+        <label>Art des Gerichts</label>
+        <select id="f_course">
+          <option value="">– nicht gesetzt –</option>
+          <option value="vorspeise">🥟 Vorspeise</option>
+          <option value="salat">🥗 Salat</option>
+          <option value="suppe">🍲 Suppe</option>
+          <option value="hauptgang">🍽️ Hauptgang</option>
+          <option value="dessert">🍰 Dessert</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Portionen</label>
+          <input type="number" id="f_servings" min="1" step="1" placeholder="z.B. 4" />
+        </div>
+        <div class="form-group">
+          <label>Gesamtzeit (min)</label>
+          <input type="number" id="f_totalTime" min="0" step="1" placeholder="z.B. 45" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Vorbereitungszeit (min)</label>
+          <input type="number" id="f_prepTime" min="0" step="1" />
+        </div>
+        <div class="form-group">
+          <label>Zubereitungszeit (min)</label>
+          <input type="number" id="f_cookTime" min="0" step="1" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Nährwerte pro Portion (optional)</label>
+        <div class="nutrition-grid">
+          <input type="text" id="f_calories" placeholder="Kalorien, z.B. 350 kcal" />
+          <input type="text" id="f_protein"  placeholder="Eiweiß, z.B. 30 g" />
+          <input type="text" id="f_carbs"    placeholder="Kohlenhydrate, z.B. 40 g" />
+          <input type="text" id="f_fat"      placeholder="Fett, z.B. 12 g" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Bewertung (1–3 Sterne)</label>
+        <div class="stars-picker" id="f_rating_picker" data-value="0">
+          <span class="star" data-val="1">☆</span>
+          <span class="star" data-val="2">☆</span>
+          <span class="star" data-val="3">☆</span>
+          <button type="button" class="btn btn-ghost" id="clearRatingBtn"
+                  style="font-size:0.8rem; padding:4px 8px; margin-left:12px;">zurücksetzen</button>
         </div>
       </div>
 
@@ -736,7 +959,8 @@ const state = {
   recipes: [],
   editingId: null,
   currentDetailId: null,
-  pendingDishImage: null // DataURL des hochgeladenen Gerichtsbildes
+  pendingDishImage: null, // DataURL des hochgeladenen Gerichtsbildes
+  courseFilter: ''        // aktiver Gang-Filter ('' = alle)
 };
 
 /* -----------------------------
@@ -761,28 +985,107 @@ function toast(msg) {
   toast._t = setTimeout(() => el.classList.remove('show'), 2200);
 }
 
-// Einfache Flaggen-Emoji-Zuordnung (kann erweitert werden)
+// Flaggen-Mapping – DE + EN Schreibweisen, case-insensitive Lookup.
 const countryFlags = {
+  // DACH
   "Deutschland": "🇩🇪", "Germany": "🇩🇪",
+  "Österreich": "🇦🇹", "Austria": "🇦🇹",
+  "Schweiz": "🇨🇭", "Switzerland": "🇨🇭",
+  // Europa
   "Italien": "🇮🇹", "Italy": "🇮🇹",
   "Frankreich": "🇫🇷", "France": "🇫🇷",
   "Spanien": "🇪🇸", "Spain": "🇪🇸",
+  "Portugal": "🇵🇹",
   "Griechenland": "🇬🇷", "Greece": "🇬🇷",
+  "Niederlande": "🇳🇱", "Netherlands": "🇳🇱", "Holland": "🇳🇱",
+  "Belgien": "🇧🇪", "Belgium": "🇧🇪",
+  "Großbritannien": "🇬🇧", "UK": "🇬🇧", "United Kingdom": "🇬🇧", "England": "🇬🇧",
+  "Irland": "🇮🇪", "Ireland": "🇮🇪",
+  "Schweden": "🇸🇪", "Sweden": "🇸🇪",
+  "Norwegen": "🇳🇴", "Norway": "🇳🇴",
+  "Dänemark": "🇩🇰", "Denmark": "🇩🇰",
+  "Finnland": "🇫🇮", "Finland": "🇫🇮",
+  "Island": "🇮🇸", "Iceland": "🇮🇸",
+  "Polen": "🇵🇱", "Poland": "🇵🇱",
+  "Tschechien": "🇨🇿", "Czech Republic": "🇨🇿",
+  "Slowakei": "🇸🇰", "Slovakia": "🇸🇰",
+  "Ungarn": "🇭🇺", "Hungary": "🇭🇺",
+  "Rumänien": "🇷🇴", "Romania": "🇷🇴",
+  "Bulgarien": "🇧🇬", "Bulgaria": "🇧🇬",
+  "Kroatien": "🇭🇷", "Croatia": "🇭🇷",
+  "Slowenien": "🇸🇮", "Slovenia": "🇸🇮",
+  "Serbien": "🇷🇸", "Serbia": "🇷🇸",
+  "Russland": "🇷🇺", "Russia": "🇷🇺",
+  "Ukraine": "🇺🇦",
+  // Naher Osten
   "Türkei": "🇹🇷", "Turkey": "🇹🇷",
+  "Libanon": "🇱🇧", "Lebanon": "🇱🇧",
+  "Israel": "🇮🇱",
+  "Syrien": "🇸🇾", "Syria": "🇸🇾",
+  "Iran": "🇮🇷", "Persien": "🇮🇷",
+  "Irak": "🇮🇶", "Iraq": "🇮🇶",
+  // Asien
   "Indien": "🇮🇳", "India": "🇮🇳",
   "China": "🇨🇳",
   "Japan": "🇯🇵",
+  "Korea": "🇰🇷", "Südkorea": "🇰🇷", "South Korea": "🇰🇷",
   "Thailand": "🇹🇭",
+  "Vietnam": "🇻🇳",
+  "Indonesien": "🇮🇩", "Indonesia": "🇮🇩",
+  "Philippinen": "🇵🇭", "Philippines": "🇵🇭",
+  "Malaysia": "🇲🇾",
+  "Singapur": "🇸🇬", "Singapore": "🇸🇬",
+  "Pakistan": "🇵🇰",
+  // Amerika
+  "USA": "🇺🇸", "Amerika": "🇺🇸", "United States": "🇺🇸",
+  "Kanada": "🇨🇦", "Canada": "🇨🇦",
   "Mexiko": "🇲🇽", "Mexico": "🇲🇽",
-  "USA": "🇺🇸",
-  "Österreich": "🇦🇹", "Austria": "🇦🇹",
-  "Schweiz": "🇨🇭", "Switzerland": "🇨🇭",
-  "Polen": "🇵🇱", "Poland": "🇵🇱",
-  "Ungarn": "🇭🇺", "Hungary": "🇭🇺",
+  "Brasilien": "🇧🇷", "Brazil": "🇧🇷",
+  "Argentinien": "🇦🇷", "Argentina": "🇦🇷",
+  "Peru": "🇵🇪",
+  "Chile": "🇨🇱",
+  "Kolumbien": "🇨🇴", "Colombia": "🇨🇴",
+  "Kuba": "🇨🇺", "Cuba": "🇨🇺",
+  // Afrika
   "Marokko": "🇲🇦", "Morocco": "🇲🇦",
-  "Libanon": "🇱🇧", "Lebanon": "🇱🇧"
+  "Ägypten": "🇪🇬", "Egypt": "🇪🇬",
+  "Tunesien": "🇹🇳", "Tunisia": "🇹🇳",
+  "Algerien": "🇩🇿", "Algeria": "🇩🇿",
+  "Äthiopien": "🇪🇹", "Ethiopia": "🇪🇹",
+  "Südafrika": "🇿🇦", "South Africa": "🇿🇦",
+  "Nigeria": "🇳🇬", "Kenia": "🇰🇪",
+  // Ozeanien
+  "Australien": "🇦🇺", "Australia": "🇦🇺",
+  "Neuseeland": "🇳🇿", "New Zealand": "🇳🇿"
 };
-function flagFor(country) { return countryFlags[country] || "🏳️"; }
+
+// Gang-Kategorien: interner Schlüssel → Anzeige-Label + Emoji.
+const COURSES = {
+  vorspeise: { label: "Vorspeise", emoji: "🥟" },
+  salat:     { label: "Salat",     emoji: "🥗" },
+  suppe:     { label: "Suppe",     emoji: "🍲" },
+  hauptgang: { label: "Hauptgang", emoji: "🍽️" },
+  dessert:   { label: "Dessert",   emoji: "🍰" }
+};
+function courseLabel(key) {
+  return COURSES[key] ? `${COURSES[key].emoji} ${COURSES[key].label}` : '';
+}
+
+function flagFor(country) {
+  if (!country) return "🏳️";
+  if (countryFlags[country]) return countryFlags[country];
+  // Case-insensitive Treffer
+  const low = country.trim().toLowerCase();
+  for (const k in countryFlags) {
+    if (k.toLowerCase() === low) return countryFlags[k];
+  }
+  // Präfix-Treffer (z.B. "Italienische Küche" → Italien)
+  for (const k in countryFlags) {
+    const kl = k.toLowerCase();
+    if (low.startsWith(kl) || kl.startsWith(low)) return countryFlags[k];
+  }
+  return "🏳️";
+}
 
 /* -----------------------------
  * 5) OCR: Heuristische Textanalyse
@@ -1059,6 +1362,352 @@ async function importPDF(file) {
 }
 
 /* -----------------------------
+ * 6b) Chefkoch-Import
+ * ----------------------------- *
+ *
+ * Chefkoch.de (und fast alle Rezept-Sites) bettet ein standardisiertes
+ * Recipe-Schema als JSON-LD in den HTML-Quelltext ein. Wir suchen alle
+ * <script type="application/ld+json">-Blöcke, picken den passenden
+ * Recipe-Eintrag heraus und mappen ihn auf unser Formular.
+ *
+ * Wege an das HTML:
+ *  1) URL + CORS-Proxy → automatisch (bequem)
+ *  2) Paste-in des HTML-Quelltextes → Fallback (robust, ohne Proxy)
+ */
+
+const CHEFKOCH_STATUS_ID = 'chefkochStatus';
+
+function chefkochStatus(msg, isError) {
+  const el = document.getElementById(CHEFKOCH_STATUS_ID);
+  if (el) {
+    el.textContent = msg || '';
+    el.style.color = isError ? 'var(--danger)' : '';
+  }
+}
+
+// Sucht im HTML alle JSON-LD-Blöcke ab und findet den ersten Recipe-Eintrag.
+function findRecipeJSONLD(html) {
+  // DOMParser liefert zuverlässig alle <script>-Blöcke.
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+
+  const visit = (node) => {
+    if (!node) return null;
+    if (Array.isArray(node)) {
+      for (const n of node) {
+        const r = visit(n);
+        if (r) return r;
+      }
+      return null;
+    }
+    if (typeof node !== 'object') return null;
+    const type = node['@type'];
+    const isRecipe = type === 'Recipe'
+      || (Array.isArray(type) && type.includes('Recipe'));
+    if (isRecipe) return node;
+    if (node['@graph']) return visit(node['@graph']);
+    return null;
+  };
+
+  for (const s of scripts) {
+    try {
+      const data = JSON.parse(s.textContent.trim());
+      const recipe = visit(data);
+      if (recipe) return recipe;
+    } catch (_) { /* ungültiges JSON ignorieren, weiter suchen */ }
+  }
+  return null;
+}
+
+// Normalisiert die verschiedenen möglichen Formen von recipeInstructions.
+function normalizeInstructions(ri) {
+  if (!ri) return '';
+  if (typeof ri === 'string') return ri.trim();
+  if (Array.isArray(ri)) {
+    return ri.map(step => {
+      if (typeof step === 'string') return step;
+      if (step && typeof step === 'object') {
+        // HowToStep oder HowToSection
+        if (step['@type'] === 'HowToSection' && Array.isArray(step.itemListElement)) {
+          return normalizeInstructions(step.itemListElement);
+        }
+        return step.text || step.name || '';
+      }
+      return '';
+    }).filter(Boolean).join('\n\n').trim();
+  }
+  if (ri.text) return ri.text.trim();
+  return '';
+}
+
+function normalizeImage(img) {
+  if (!img) return null;
+  if (typeof img === 'string') return img;
+  if (Array.isArray(img)) return normalizeImage(img[0]);
+  if (img.url) return img.url;
+  return null;
+}
+
+// Versucht, ein Land/eine Küche zu bestimmen.
+function guessCountry(recipe) {
+  if (recipe.recipeCuisine) {
+    const c = Array.isArray(recipe.recipeCuisine)
+      ? recipe.recipeCuisine[0]
+      : recipe.recipeCuisine;
+    return String(c).trim();
+  }
+  // Chefkoch pflegt Kategorien in keywords – heuristisch schauen.
+  const keywords = (recipe.keywords || '') + ' ' + (recipe.recipeCategory || '');
+  const map = {
+    'italien': 'Italien', 'italian': 'Italien',
+    'deutsch': 'Deutschland', 'german': 'Deutschland',
+    'franz': 'Frankreich', 'french': 'Frankreich',
+    'spani': 'Spanien',
+    'griech': 'Griechenland',
+    'türk': 'Türkei', 'turkish': 'Türkei',
+    'indisch': 'Indien', 'indian': 'Indien',
+    'chinesisch': 'China',
+    'japanisch': 'Japan',
+    'thai': 'Thailand',
+    'mexik': 'Mexiko',
+    'österr': 'Österreich', 'austri': 'Österreich',
+    'schweiz': 'Schweiz', 'swiss': 'Schweiz',
+    'ungar': 'Ungarn',
+    'polni': 'Polen',
+    'marokk': 'Marokko',
+    'libanes': 'Libanon'
+  };
+  const low = keywords.toLowerCase();
+  for (const key in map) {
+    if (low.includes(key)) return map[key];
+  }
+  return 'Deutschland'; // sinnvoller Default für Chefkoch
+}
+
+// Sucht im HTML die kanonische URL (für den Paste-HTML-Weg).
+function findSourceUrlInHTML(html) {
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const canonical = doc.querySelector('link[rel="canonical"]');
+  if (canonical && canonical.href) return canonical.href;
+  const og = doc.querySelector('meta[property="og:url"]');
+  if (og && og.content) return og.content;
+  return '';
+}
+
+// ISO-8601-Dauer ("PT1H30M", "PT20M") in ganze Minuten umwandeln.
+function parseISODurationToMinutes(iso) {
+  if (!iso) return null;
+  if (typeof iso === 'number') return iso;
+  const m = String(iso).match(/^P(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/i);
+  if (!m) return null;
+  const h = parseInt(m[1] || '0', 10);
+  const min = parseInt(m[2] || '0', 10);
+  const s = parseInt(m[3] || '0', 10);
+  const total = h * 60 + min + Math.round(s / 60);
+  return total > 0 ? total : null;
+}
+
+// recipeYield kann Zahl, String ("4 Portionen") oder Array sein.
+function parseServings(v) {
+  if (v == null) return '';
+  if (Array.isArray(v)) return parseServings(v[0]);
+  if (typeof v === 'number') return String(v);
+  if (typeof v === 'object') return parseServings(v.value || v.name);
+  // Nur die erste Zahl extrahieren: "4 Portionen" → "4"
+  const m = String(v).match(/\d+/);
+  return m ? m[0] : String(v).trim();
+}
+
+// NutritionInformation → kompaktes Objekt mit Strings ("350 kcal", "30 g").
+function parseNutrition(n) {
+  if (!n || typeof n !== 'object') return null;
+  const clean = (v) => v ? String(v).trim() : '';
+  const out = {
+    calories: clean(n.calories),
+    protein:  clean(n.proteinContent),
+    carbs:    clean(n.carbohydrateContent),
+    fat:      clean(n.fatContent)
+  };
+  return (out.calories || out.protein || out.carbs || out.fat) ? out : null;
+}
+
+// Extrahiert einen Autor-Namen aus dem JSON-LD (kann String, Object oder Array sein).
+function normalizeAuthor(a) {
+  if (!a) return '';
+  if (typeof a === 'string') return a.trim();
+  if (Array.isArray(a)) return a.map(normalizeAuthor).filter(Boolean).join(', ');
+  if (a.name) return String(a.name).trim();
+  return '';
+}
+
+// Mappt ein Recipe-Objekt ins Formular.
+async function applyRecipeSchema(recipe, sourceUrl) {
+  if (!recipe) throw new Error('Kein Recipe-Schema im HTML gefunden.');
+
+  const name = (recipe.name || '').toString().trim();
+  const ingredients = Array.isArray(recipe.recipeIngredient)
+    ? recipe.recipeIngredient.map(s => String(s).trim()).filter(Boolean).join('\n')
+    : '';
+  const instructions = normalizeInstructions(recipe.recipeInstructions);
+  const country = guessCountry(recipe);
+  const imageUrl = normalizeImage(recipe.image);
+
+  // Quelle zusammensetzen: bevorzugt übergebene URL, sonst @id / mainEntityOfPage / url.
+  let source = sourceUrl || '';
+  if (!source) {
+    source = recipe['@id'] || recipe.url || '';
+    if (recipe.mainEntityOfPage) {
+      source = typeof recipe.mainEntityOfPage === 'string'
+        ? recipe.mainEntityOfPage
+        : (recipe.mainEntityOfPage['@id'] || source);
+    }
+  }
+  const author = normalizeAuthor(recipe.author);
+
+  if (name) document.getElementById('f_name').value = name;
+  if (country) document.getElementById('f_country').value = country;
+  if (ingredients) document.getElementById('f_ingredients').value = ingredients;
+  if (instructions) document.getElementById('f_instructions').value = instructions;
+  if (source) document.getElementById('f_source').value = source;
+  // Autor merken (in der Zubereitung als Fußnote anhängen wäre invasiv –
+  // stattdessen im state, wird beim Speichern mitgenommen).
+  state.pendingAuthor = author;
+
+  // Portionen
+  const servings = parseServings(recipe.recipeYield);
+  if (servings) document.getElementById('f_servings').value = servings;
+
+  // Zeiten (PT20M, PT1H30M, …)
+  const prep  = parseISODurationToMinutes(recipe.prepTime);
+  const cook  = parseISODurationToMinutes(recipe.cookTime);
+  let total   = parseISODurationToMinutes(recipe.totalTime);
+  if (!total && (prep || cook)) total = (prep || 0) + (cook || 0);
+  if (prep)  document.getElementById('f_prepTime').value  = prep;
+  if (cook)  document.getElementById('f_cookTime').value  = cook;
+  if (total) document.getElementById('f_totalTime').value = total;
+
+  // Nährwerte
+  const nut = parseNutrition(recipe.nutrition);
+  if (nut) {
+    if (nut.calories) document.getElementById('f_calories').value = nut.calories;
+    if (nut.protein)  document.getElementById('f_protein').value  = nut.protein;
+    if (nut.carbs)    document.getElementById('f_carbs').value    = nut.carbs;
+    if (nut.fat)      document.getElementById('f_fat').value      = nut.fat;
+  }
+
+  // Bild laden (via Proxy, wegen CORS) und als DataURL speichern.
+  if (imageUrl) {
+    try {
+      const dataURL = await fetchImageAsDataURL(imageUrl);
+      if (dataURL) {
+        state.pendingDishImage = dataURL;
+        const preview = document.getElementById('dishPreview');
+        preview.src = dataURL;
+        preview.classList.remove('hidden');
+      }
+    } catch (_) {
+      // Bild optional – Fehler ignorieren
+    }
+  }
+}
+
+// CORS-Proxy-Helper: versucht zwei Dienste hintereinander.
+async function fetchViaCorsProxy(targetUrl) {
+  const proxies = [
+    // corsproxy.io liefert Response direkt durch
+    (u) => fetch('https://corsproxy.io/?' + encodeURIComponent(u)).then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }),
+    // allorigins gibt JSON zurück, Inhalt liegt in .contents
+    (u) => fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(u))
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(j => j.contents || '')
+  ];
+  let lastErr;
+  for (const p of proxies) {
+    try {
+      const html = await p(targetUrl);
+      if (html && html.length > 100) return html;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw new Error('Alle CORS-Proxies fehlgeschlagen' +
+    (lastErr ? ' (' + lastErr.message + ')' : ''));
+}
+
+async function fetchImageAsDataURL(imgUrl) {
+  // Erst direkt probieren – klappt bei manchen Bildhosts dank CORS-Headern.
+  try {
+    const r = await fetch(imgUrl);
+    if (r.ok) return await blobToDataURL(await r.blob());
+  } catch (_) {}
+  // Fallback via Proxy
+  const r = await fetch('https://corsproxy.io/?' + encodeURIComponent(imgUrl));
+  if (!r.ok) throw new Error('Bild konnte nicht geladen werden');
+  return await blobToDataURL(await r.blob());
+}
+function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(blob);
+  });
+}
+
+async function importFromChefkochUrl(url) {
+  if (!url || !/^https?:\/\//i.test(url)) {
+    chefkochStatus('Bitte eine gültige URL eingeben.', true);
+    return;
+  }
+  chefkochStatus('Lade Seite über CORS-Proxy...');
+  try {
+    const html = await fetchViaCorsProxy(url);
+    const recipe = findRecipeJSONLD(html);
+    if (!recipe) {
+      chefkochStatus('Kein Recipe-Schema in der Seite gefunden. Versuche den HTML-Fallback.', true);
+      return;
+    }
+    await applyRecipeSchema(recipe, url); // URL als Quelle mitgeben
+    chefkochStatus('Rezept übernommen ✓');
+    toast('Aus Chefkoch importiert ✓');
+  } catch (err) {
+    console.error(err);
+    chefkochStatus('Fehlgeschlagen: ' + (err.message || err) +
+                   ' – nutze ggf. "HTML einfügen".', true);
+  }
+}
+
+async function importFromChefkochHtml(html) {
+  if (!html || html.length < 50) {
+    chefkochStatus('Bitte den vollständigen HTML-Quelltext einfügen.', true);
+    return;
+  }
+  chefkochStatus('Analysiere HTML...');
+  try {
+    const recipe = findRecipeJSONLD(html);
+    if (!recipe) {
+      chefkochStatus('Kein Recipe-Schema im eingefügten HTML gefunden.', true);
+      return;
+    }
+    // Bei Paste-HTML: canonical-URL oder og:url als Quelle verwenden.
+    const sourceUrl = findSourceUrlInHTML(html);
+    await applyRecipeSchema(recipe, sourceUrl);
+    chefkochStatus('Rezept übernommen ✓');
+    toast('Rezept aus HTML importiert ✓');
+  } catch (err) {
+    console.error(err);
+    chefkochStatus('Fehlgeschlagen: ' + (err.message || err), true);
+  }
+}
+
+/* -----------------------------
  * 7) Rendering
  * ----------------------------- */
 function renderRecipes() {
@@ -1067,11 +1716,13 @@ function renderRecipes() {
 
   const search = document.getElementById('searchInput').value.toLowerCase().trim();
   const countryFilter = document.getElementById('countryFilter').value;
+  const courseFilter = state.courseFilter || '';
   const favOnly = document.getElementById('favFilter').checked;
 
   // Filter anwenden
   let list = state.recipes.filter(r => {
     if (countryFilter && r.country !== countryFilter) return false;
+    if (courseFilter && r.course !== courseFilter) return false;
     if (favOnly && !r.favorite) return false;
     if (search) {
       const hay = (r.name + ' ' + r.country + ' ' + r.ingredients).toLowerCase();
@@ -1135,9 +1786,27 @@ function renderCard(recipe) {
 
   const body = document.createElement('div');
   body.className = 'body';
+  const courseTag = recipe.course
+    ? `<span class="course-tag">${courseLabel(recipe.course)}</span>`
+    : '';
+  const servingsCell = recipe.servings ? `👥 ${recipe.servings}` : '';
+  const ratingCell   = recipe.rating > 0
+    ? `<span class="rating-display">${renderStarsHtml(recipe.rating)}</span>` : '';
+  const timeCell     = recipe.totalTime ? `⏱️ ${recipe.totalTime} min` : '';
+  const tripleMeta = (servingsCell || ratingCell || timeCell)
+    ? `<div class="meta-triple">
+         <span>${servingsCell}</span>
+         <span>${ratingCell}</span>
+         <span>${timeCell}</span>
+       </div>`
+    : '';
   body.innerHTML = `
     <h3>${escapeHtml(recipe.name)}</h3>
-    <div class="meta">${flagFor(recipe.country)} ${escapeHtml(recipe.country)}</div>
+    <div class="meta">
+      <span>${flagFor(recipe.country)} ${escapeHtml(recipe.country)}</span>
+      ${courseTag}
+    </div>
+    ${tripleMeta}
   `;
 
   const fav = document.createElement('button');
@@ -1165,6 +1834,16 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// Liefert die HTML-Repräsentation einer 1–3-Sterne-Bewertung.
+function renderStarsHtml(rating) {
+  const r = Math.max(0, Math.min(3, rating | 0));
+  let html = '';
+  for (let i = 1; i <= 3; i++) {
+    html += i <= r ? '★' : '<span class="empty">☆</span>';
+  }
+  return html;
+}
+
 function updateCountryFilter() {
   const select = document.getElementById('countryFilter');
   const current = select.value;
@@ -1184,7 +1863,96 @@ function updateCountryFilter() {
 async function refresh() {
   state.recipes = await dbAll();
   updateCountryFilter();
+  renderFlagQuickFilter();
+  renderCourseQuickFilter();
   renderRecipes();
+}
+
+// Gänge-Schnellfilter: fixe Leiste mit den 5 Kategorien + "Alle".
+function renderCourseQuickFilter() {
+  const el = document.getElementById('courseQuickFilter');
+  el.innerHTML = '';
+  const active = state.courseFilter || '';
+
+  const all = document.createElement('button');
+  all.className = 'flag-chip' + (!active ? ' active' : '');
+  all.innerHTML = '🍴 Alle Gänge';
+  all.addEventListener('click', () => {
+    state.courseFilter = '';
+    renderCourseQuickFilter();
+    renderRecipes();
+  });
+  el.appendChild(all);
+
+  for (const key in COURSES) {
+    const c = COURSES[key];
+    const chip = document.createElement('button');
+    chip.className = 'flag-chip' + (active === key ? ' active' : '');
+    chip.innerHTML = `${c.emoji} ${c.label}`;
+    chip.addEventListener('click', () => {
+      // gleicher Chip nochmal → abwählen
+      state.courseFilter = (active === key) ? '' : key;
+      renderCourseQuickFilter();
+      renderRecipes();
+    });
+    el.appendChild(chip);
+  }
+}
+
+// Flaggen-Schnellfilter: klickbare Chips aller vorhandenen Länder.
+function renderFlagQuickFilter() {
+  const el = document.getElementById('flagQuickFilter');
+  const countries = [...new Set(state.recipes.map(r => r.country).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'de'));
+  el.innerHTML = '';
+  if (countries.length === 0) {
+    el.classList.add('hidden');
+    return;
+  }
+  el.classList.remove('hidden');
+
+  const active = document.getElementById('countryFilter').value;
+
+  // "Alle"-Chip
+  const all = document.createElement('button');
+  all.className = 'flag-chip' + (!active ? ' active' : '');
+  all.innerHTML = '🌍 Alle';
+  all.addEventListener('click', () => {
+    document.getElementById('countryFilter').value = '';
+    renderFlagQuickFilter();
+    renderRecipes();
+  });
+  el.appendChild(all);
+
+  for (const c of countries) {
+    const chip = document.createElement('button');
+    chip.className = 'flag-chip' + (active === c ? ' active' : '');
+    chip.innerHTML = `${flagFor(c)} ${escapeHtml(c)}`;
+    chip.addEventListener('click', () => {
+      const sel = document.getElementById('countryFilter');
+      sel.value = (sel.value === c) ? '' : c;
+      renderFlagQuickFilter();
+      renderRecipes();
+    });
+    el.appendChild(chip);
+  }
+}
+
+// Sterne-Picker (1–3): Lese-/Schreib-Helper.
+function setRatingPicker(value) {
+  const picker = document.getElementById('f_rating_picker');
+  const v = Math.max(0, Math.min(3, value | 0));
+  picker.dataset.value = v;
+  picker.querySelectorAll('.star').forEach(s => {
+    const val = parseInt(s.dataset.val, 10);
+    s.classList.toggle('filled', val <= v);
+    s.textContent = val <= v ? '★' : '☆';
+  });
+}
+function getRatingPicker() {
+  return parseInt(
+    document.getElementById('f_rating_picker').dataset.value || '0', 10
+  );
 }
 
 /* -----------------------------
@@ -1207,6 +1975,22 @@ function openEditModal(recipe = null) {
   document.getElementById('f_country').value = recipe ? recipe.country : '';
   document.getElementById('f_ingredients').value = recipe ? recipe.ingredients : '';
   document.getElementById('f_instructions').value = recipe ? recipe.instructions : '';
+  document.getElementById('f_course').value = recipe ? (recipe.course || '') : '';
+  document.getElementById('f_source').value = recipe ? (recipe.source || '') : '';
+  state.pendingAuthor = recipe ? (recipe.author || '') : '';
+
+  // Portionen / Zeiten / Nährwerte
+  document.getElementById('f_servings').value  = recipe && recipe.servings  ? recipe.servings  : '';
+  document.getElementById('f_prepTime').value  = recipe && recipe.prepTime  ? recipe.prepTime  : '';
+  document.getElementById('f_cookTime').value  = recipe && recipe.cookTime  ? recipe.cookTime  : '';
+  document.getElementById('f_totalTime').value = recipe && recipe.totalTime ? recipe.totalTime : '';
+  const nut = (recipe && recipe.nutrition) || {};
+  document.getElementById('f_calories').value = nut.calories || '';
+  document.getElementById('f_protein').value  = nut.protein  || '';
+  document.getElementById('f_carbs').value    = nut.carbs    || '';
+  document.getElementById('f_fat').value      = nut.fat      || '';
+
+  setRatingPicker(recipe ? (recipe.rating || 0) : 0);
 
   const preview = document.getElementById('dishPreview');
   if (state.pendingDishImage) {
@@ -1221,6 +2005,12 @@ function openEditModal(recipe = null) {
   document.getElementById('ocrStatus').textContent = '';
   document.getElementById('ocrProgress').classList.remove('active');
   document.getElementById('ocrProgressBar').style.width = '0%';
+
+  // Chefkoch-Import zurücksetzen
+  document.getElementById('chefkochUrl').value = '';
+  document.getElementById('chefkochHtml').value = '';
+  document.getElementById('chefkochHtmlWrap').classList.add('hidden');
+  chefkochStatus('');
 
   openModal('editModal');
 }
@@ -1241,11 +2031,63 @@ function openDetail(id) {
     body.appendChild(img);
   }
 
+  // Quelle als klickbarer Link (Domain extrahieren).
+  let sourceHtml = '';
+  if (recipe.source) {
+    let host = recipe.source;
+    try { host = new URL(recipe.source).hostname.replace(/^www\./, ''); } catch (_) {}
+    const authorPart = recipe.author ? ` · ${escapeHtml(recipe.author)}` : '';
+    sourceHtml = `
+      <div class="detail-section">
+        <h4>Quelle</h4>
+        <div>🔗 <a href="${escapeHtml(recipe.source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(host)}</a>${authorPart}</div>
+      </div>`;
+  } else if (recipe.author) {
+    sourceHtml = `
+      <div class="detail-section">
+        <h4>Autor</h4>
+        <div>${escapeHtml(recipe.author)}</div>
+      </div>`;
+  }
+
+  // Meta-Chips (Portionen, Zeiten)
+  const fmtMin = (m) => m >= 60 ? `${Math.floor(m/60)} h ${m%60 ? (m%60)+' min' : ''}`.trim() : `${m} min`;
+  const metaChips = [];
+  if (recipe.servings)  metaChips.push(`👥 ${recipe.servings} Portionen`);
+  if (recipe.totalTime) metaChips.push(`⏱️ ${fmtMin(recipe.totalTime)} gesamt`);
+  if (recipe.prepTime)  metaChips.push(`🔪 ${fmtMin(recipe.prepTime)} Vorbereitung`);
+  if (recipe.cookTime)  metaChips.push(`🔥 ${fmtMin(recipe.cookTime)} Zubereitung`);
+  const metaHtml = metaChips.length
+    ? `<div class="detail-section">${metaChips.map(c => `<span class="chip">${c}</span>`).join(' ')}</div>`
+    : '';
+
+  // Nährwerte-Grid
+  let nutritionHtml = '';
+  const n = recipe.nutrition;
+  if (n && (n.calories || n.protein || n.carbs || n.fat)) {
+    const cell = (label, val) => val
+      ? `<div class="nutrition-cell"><div class="n-label">${label}</div><div class="n-value">${escapeHtml(val)}</div></div>`
+      : '';
+    nutritionHtml = `
+      <div class="detail-section">
+        <h4>Nährwerte${recipe.servings ? ' (pro Portion)' : ''}</h4>
+        <div class="nutrition-grid">
+          ${cell('Kalorien', n.calories)}
+          ${cell('Eiweiß',   n.protein)}
+          ${cell('Kohlenh.', n.carbs)}
+          ${cell('Fett',     n.fat)}
+        </div>
+      </div>`;
+  }
+
   body.insertAdjacentHTML('beforeend', `
     <div class="detail-section">
       <span class="chip">${flagFor(recipe.country)} ${escapeHtml(recipe.country)}</span>
+      ${recipe.course ? `<span class="chip">${courseLabel(recipe.course)}</span>` : ''}
       ${recipe.favorite ? '<span class="chip">⭐ Favorit</span>' : ''}
+      ${recipe.rating > 0 ? `<span class="chip"><span class="rating-display">${renderStarsHtml(recipe.rating)}</span></span>` : ''}
     </div>
+    ${metaHtml}
     <div class="detail-section">
       <h4>${t('ingredients').replace(' *','')}</h4>
       <div class="content">${escapeHtml(recipe.ingredients)}</div>
@@ -1254,6 +2096,8 @@ function openDetail(id) {
       <h4>${t('instructions').replace(' *','')}</h4>
       <div class="content">${escapeHtml(recipe.instructions)}</div>
     </div>
+    ${nutritionHtml}
+    ${sourceHtml}
   `);
 
   openModal('detailModal');
@@ -1274,11 +2118,35 @@ async function saveCurrent() {
     ? state.recipes.find(r => r.id === state.editingId)
     : null;
 
+  // Zahlen nur speichern, wenn wirklich eingegeben.
+  const num = (id) => {
+    const v = document.getElementById(id).value.trim();
+    return v === '' ? null : parseInt(v, 10);
+  };
+  const text = (id) => document.getElementById(id).value.trim();
+
+  const nutrition = {
+    calories: text('f_calories'),
+    protein:  text('f_protein'),
+    carbs:    text('f_carbs'),
+    fat:      text('f_fat')
+  };
+  const hasNutrition = Object.values(nutrition).some(v => v);
+
   const recipe = {
     id: existing ? existing.id : uid(),
     name, country, ingredients, instructions,
     image: state.pendingDishImage || (existing ? existing.image : null),
     favorite: existing ? !!existing.favorite : false,
+    rating: getRatingPicker(),
+    course: document.getElementById('f_course').value || '',
+    source: document.getElementById('f_source').value.trim() || '',
+    author: state.pendingAuthor || (existing ? (existing.author || '') : ''),
+    servings:  num('f_servings'),
+    prepTime:  num('f_prepTime'),
+    cookTime:  num('f_cookTime'),
+    totalTime: num('f_totalTime'),
+    nutrition: hasNutrition ? nutrition : null,
     createdAt: existing ? existing.createdAt : Date.now(),
     updatedAt: Date.now()
   };
@@ -1398,11 +2266,43 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Suche & Filter
   document.getElementById('searchInput').addEventListener('input', renderRecipes);
-  document.getElementById('countryFilter').addEventListener('change', renderRecipes);
+  document.getElementById('countryFilter').addEventListener('change', () => {
+    renderFlagQuickFilter();
+    renderRecipes();
+  });
   document.getElementById('favFilter').addEventListener('change', renderRecipes);
 
   // OCR / PDF Drop Zone (Dispatcher entscheidet anhand Dateityp)
   setupDropZone('ocrDropZone', 'ocrFileInput', handleImportFile);
+
+  // Sterne-Picker
+  document.querySelectorAll('#f_rating_picker .star').forEach(star => {
+    star.addEventListener('click', () => {
+      const v = parseInt(star.dataset.val, 10);
+      const current = getRatingPicker();
+      setRatingPicker(current === v ? 0 : v); // gleicher Stern nochmal → Reset
+    });
+  });
+  document.getElementById('clearRatingBtn').addEventListener('click', () => {
+    setRatingPicker(0);
+  });
+
+  // Chefkoch-Import
+  document.getElementById('chefkochImportBtn').addEventListener('click', () => {
+    importFromChefkochUrl(document.getElementById('chefkochUrl').value.trim());
+  });
+  document.getElementById('chefkochUrl').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      importFromChefkochUrl(e.target.value.trim());
+    }
+  });
+  document.getElementById('chefkochHtmlBtn').addEventListener('click', () => {
+    document.getElementById('chefkochHtmlWrap').classList.toggle('hidden');
+  });
+  document.getElementById('chefkochHtmlParseBtn').addEventListener('click', () => {
+    importFromChefkochHtml(document.getElementById('chefkochHtml').value);
+  });
 
   // Gerichtsbild Drop Zone
   setupDropZone('dishDropZone', 'dishFileInput', async (file) => {
