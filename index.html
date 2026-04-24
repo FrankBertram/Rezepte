@@ -4,6 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Rezeptverwaltung</title>
+<link rel="icon" type="image/jpeg" href="Rezepte.jpg" />
+<link rel="apple-touch-icon" href="Rezepte.jpg" />
 
 <!-- Tesseract.js für OCR-Erkennung aus Bildern -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -126,6 +128,11 @@
     gap: 8px;
   }
   .logo-icon { font-size: 1.6rem; }
+  .app-version {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--muted);
+  }
   .header-actions {
     margin-left: auto;
     display: flex;
@@ -194,6 +201,30 @@
   @media (max-width: 640px) {
     .toolbar { grid-template-columns: 1fr; }
   }
+
+  .search-wrap { position: relative; }
+  .search-wrap input { width: 100%; padding-right: 34px; }
+  .search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: var(--muted);
+    color: var(--surface);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .search-clear:hover { background: var(--text); }
+  .search-wrap.has-value .search-clear { display: flex; }
 
   input, select, textarea {
     font-family: inherit;
@@ -563,6 +594,7 @@
     <div class="logo">
       <span class="logo-icon">🍲</span>
       <span data-i18n="appTitle">Rezeptverwaltung</span>
+      <span class="app-version">v1.0</span>
     </div>
     <div class="header-actions">
       <button class="btn" id="importBtn">📥 Import</button>
@@ -575,8 +607,11 @@
 <main>
   <!-- Such- und Filterleiste -->
   <div class="toolbar">
-    <input type="text" id="searchInput" data-i18n-placeholder="searchPlaceholder"
-           placeholder="Suche nach Name oder Zutaten..." />
+    <div class="search-wrap">
+      <input type="text" id="searchInput" data-i18n-placeholder="searchPlaceholder"
+             placeholder="Suche nach Name oder Zutaten..." />
+      <button type="button" id="searchClear" class="search-clear" aria-label="Suche löschen" title="Suche löschen">✕</button>
+    </div>
     <select id="countryFilter">
       <option value="" data-i18n="allCountries">Alle Länder</option>
     </select>
@@ -1071,6 +1106,91 @@ function courseLabel(key) {
   return COURSES[key] ? `${COURSES[key].emoji} ${COURSES[key].label}` : '';
 }
 
+// Adjektive / Sprach-Bezeichnungen → kanonischer Landesname.
+// Deckt deutsche Adjektivformen (isch/ische/…) und englische Nationalitätsbezeichnungen ab.
+const countryAdjectives = {
+  // Deutsch
+  "deutsch": "Deutschland", "österreichisch": "Österreich",
+  "schweizerisch": "Schweiz", "schweizer": "Schweiz",
+  "italienisch": "Italien", "französisch": "Frankreich",
+  "spanisch": "Spanien", "portugiesisch": "Portugal",
+  "griechisch": "Griechenland", "niederländisch": "Niederlande",
+  "holländisch": "Niederlande", "belgisch": "Belgien",
+  "britisch": "Großbritannien", "englisch": "Großbritannien",
+  "irisch": "Irland", "schwedisch": "Schweden",
+  "norwegisch": "Norwegen", "dänisch": "Dänemark",
+  "finnisch": "Finnland", "isländisch": "Island",
+  "polnisch": "Polen", "tschechisch": "Tschechien",
+  "slowakisch": "Slowakei", "ungarisch": "Ungarn",
+  "rumänisch": "Rumänien", "bulgarisch": "Bulgarien",
+  "kroatisch": "Kroatien", "slowenisch": "Slowenien",
+  "serbisch": "Serbien", "russisch": "Russland",
+  "ukrainisch": "Ukraine", "türkisch": "Türkei",
+  "libanesisch": "Libanon", "israelisch": "Israel",
+  "syrisch": "Syrien", "iranisch": "Iran", "persisch": "Iran",
+  "irakisch": "Irak", "indisch": "Indien",
+  "chinesisch": "China", "japanisch": "Japan",
+  "koreanisch": "Korea", "südkoreanisch": "Korea",
+  "thailändisch": "Thailand", "thai": "Thailand",
+  "vietnamesisch": "Vietnam", "indonesisch": "Indonesien",
+  "philippinisch": "Philippinen", "malaysisch": "Malaysia",
+  "singapurisch": "Singapur", "pakistanisch": "Pakistan",
+  "amerikanisch": "USA", "kanadisch": "Kanada",
+  "mexikanisch": "Mexiko", "brasilianisch": "Brasilien",
+  "argentinisch": "Argentinien", "peruanisch": "Peru",
+  "chilenisch": "Chile", "kolumbianisch": "Kolumbien",
+  "kubanisch": "Kuba", "marokkanisch": "Marokko",
+  "ägyptisch": "Ägypten", "tunesisch": "Tunesien",
+  "algerisch": "Algerien", "äthiopisch": "Äthiopien",
+  "südafrikanisch": "Südafrika", "nigerianisch": "Nigeria",
+  "kenianisch": "Kenia", "australisch": "Australien",
+  "neuseeländisch": "Neuseeland",
+  // Englisch
+  "german": "Deutschland", "austrian": "Österreich", "swiss": "Schweiz",
+  "italian": "Italien", "french": "Frankreich", "spanish": "Spanien",
+  "portuguese": "Portugal", "greek": "Griechenland",
+  "dutch": "Niederlande", "belgian": "Belgien",
+  "british": "Großbritannien", "irish": "Irland",
+  "swedish": "Schweden", "norwegian": "Norwegen",
+  "danish": "Dänemark", "finnish": "Finnland",
+  "icelandic": "Island", "polish": "Polen",
+  "czech": "Tschechien", "slovak": "Slowakei",
+  "hungarian": "Ungarn", "romanian": "Rumänien",
+  "bulgarian": "Bulgarien", "croatian": "Kroatien",
+  "slovenian": "Slowenien", "serbian": "Serbien",
+  "russian": "Russland", "ukrainian": "Ukraine",
+  "turkish": "Türkei", "lebanese": "Libanon",
+  "israeli": "Israel", "syrian": "Syrien",
+  "iranian": "Iran", "iraqi": "Irak",
+  "indian": "Indien", "chinese": "China",
+  "japanese": "Japan", "korean": "Korea",
+  "vietnamese": "Vietnam", "indonesian": "Indonesien",
+  "filipino": "Philippinen", "philippine": "Philippinen",
+  "malaysian": "Malaysia", "singaporean": "Singapur",
+  "pakistani": "Pakistan", "american": "USA",
+  "canadian": "Kanada", "mexican": "Mexiko",
+  "brazilian": "Brasilien", "argentinian": "Argentinien",
+  "argentine": "Argentinien", "peruvian": "Peru",
+  "chilean": "Chile", "colombian": "Kolumbien",
+  "cuban": "Kuba", "moroccan": "Marokko",
+  "egyptian": "Ägypten", "tunisian": "Tunesien",
+  "algerian": "Algerien", "ethiopian": "Äthiopien",
+  "nigerian": "Nigeria", "kenyan": "Kenia",
+  "australian": "Australien"
+};
+
+// "Indisch", "Indische", "Indian" → "Indien".
+// Gibt den Originalstring zurück, wenn keine Zuordnung gefunden wird.
+function normalizeCountry(name) {
+  if (!name) return name;
+  const low = String(name).trim().toLowerCase();
+  if (countryAdjectives[low]) return countryAdjectives[low];
+  // Flexionsendungen abschneiden (z.B. "indische" → "indisch").
+  const stripped = low.replace(/(en|er|es|e|n)$/, '');
+  if (countryAdjectives[stripped]) return countryAdjectives[stripped];
+  return name;
+}
+
 function flagFor(country) {
   if (!country) return "🏳️";
   if (countryFlags[country]) return countryFlags[country];
@@ -1083,6 +1203,11 @@ function flagFor(country) {
   for (const k in countryFlags) {
     const kl = k.toLowerCase();
     if (low.startsWith(kl) || kl.startsWith(low)) return countryFlags[k];
+  }
+  // Adjektiv / Nationalität (z.B. "Indisch" → Indien)
+  const normalized = normalizeCountry(country);
+  if (normalized && normalized !== country && countryFlags[normalized]) {
+    return countryFlags[normalized];
   }
   return "🏳️";
 }
@@ -1454,7 +1579,7 @@ function guessCountry(recipe) {
     const c = Array.isArray(recipe.recipeCuisine)
       ? recipe.recipeCuisine[0]
       : recipe.recipeCuisine;
-    return String(c).trim();
+    return normalizeCountry(String(c).trim());
   }
   // Chefkoch pflegt Kategorien in keywords – heuristisch schauen.
   const keywords = (recipe.keywords || '') + ' ' + (recipe.recipeCategory || '');
@@ -2265,7 +2390,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('deleteRecipeBtn').addEventListener('click', deleteCurrentDetail);
 
   // Suche & Filter
-  document.getElementById('searchInput').addEventListener('input', renderRecipes);
+  const searchInputEl = document.getElementById('searchInput');
+  const searchWrapEl = searchInputEl.closest('.search-wrap');
+  const searchClearEl = document.getElementById('searchClear');
+  const updateSearchClear = () => {
+    searchWrapEl.classList.toggle('has-value', searchInputEl.value.length > 0);
+  };
+  searchInputEl.addEventListener('input', () => {
+    updateSearchClear();
+    renderRecipes();
+  });
+  searchClearEl.addEventListener('click', () => {
+    searchInputEl.value = '';
+    updateSearchClear();
+    renderRecipes();
+    searchInputEl.focus();
+  });
   document.getElementById('countryFilter').addEventListener('change', () => {
     renderFlagQuickFilter();
     renderRecipes();
