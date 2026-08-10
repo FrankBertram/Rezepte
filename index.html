@@ -400,6 +400,7 @@
     border-top: 1px solid var(--border);
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 8px;
     background: var(--surface-2);
   }
@@ -484,6 +485,88 @@
     font-size: 0.85rem;
     margin-right: 6px;
   }
+
+  /* =========================================================
+     Zutaten mit Auswahl-Checkboxen (Detailansicht)
+     ========================================================= */
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .section-head h4 { margin: 0; }
+  .section-head .spacer { margin-left: auto; }
+  .ingredient-list {
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    padding: 6px;
+  }
+  .ingredient-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .ingredient-row:hover { background: var(--surface); }
+  .ingredient-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 2px 0 0 0;
+    accent-color: var(--primary);
+    flex: none;
+    cursor: pointer;
+  }
+  .ingredient-row span { white-space: pre-wrap; }
+  .ingredient-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* =========================================================
+     Einkaufsliste
+     ========================================================= */
+  .shopping-count {
+    display: inline-block;
+    min-width: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    text-align: center;
+  }
+  .shopping-count.empty { display: none; }
+  .shopping-group { margin-bottom: 16px; }
+  .shopping-group h4 {
+    margin: 0 0 6px 0;
+    font-size: 0.95rem;
+    color: var(--primary);
+  }
+  .shopping-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    margin-bottom: 4px;
+  }
+  .shopping-item span { flex: 1; white-space: pre-wrap; }
+  .shopping-item button {
+    padding: 2px 8px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--muted);
+    font-size: 1rem;
+  }
+  .shopping-item button:hover { color: var(--danger); background: var(--surface); }
 
   /* Toast */
   .toast {
@@ -597,6 +680,10 @@
       <span class="app-version">v1.0</span>
     </div>
     <div class="header-actions">
+      <button class="btn" id="shoppingBtn" title="Einkaufsliste öffnen">
+        🛒 <span data-i18n="shoppingList">Einkaufsliste</span>
+        <span class="shopping-count empty" id="shoppingCount">0</span>
+      </button>
       <button class="btn" id="importBtn">📥 Import</button>
       <button class="btn" id="exportBtn">📤 Export</button>
       <button class="btn btn-primary" id="newRecipeBtn">➕ Neues Rezept</button>
@@ -839,7 +926,23 @@
     <div class="modal-body" id="detailBody"></div>
     <div class="modal-footer">
       <button class="btn btn-danger" id="deleteRecipeBtn">🗑️ <span data-i18n="delete">Löschen</span></button>
+      <button class="btn" id="backupRecipeBtn" title="Dieses Rezept inkl. Foto als JSON-Datei sichern">💾 <span data-i18n="backupSingle">Backup</span></button>
       <button class="btn btn-primary" id="editRecipeBtn">✏️ <span data-i18n="edit">Bearbeiten</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Einkaufslisten-Modal ==================== -->
+<div class="modal-backdrop" id="shoppingModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">🛒 <span data-i18n="shoppingList">Einkaufsliste</span></h3>
+      <button class="btn btn-ghost btn-icon" data-close="shoppingModal">✕</button>
+    </div>
+    <div class="modal-body" id="shoppingBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="shoppingClearBtn">🗑️ <span data-i18n="shoppingClear">Liste leeren</span></button>
+      <button class="btn btn-primary" id="shoppingTxtBtn">📄 <span data-i18n="shoppingTxt">Als .txt speichern</span></button>
     </div>
   </div>
 </div>
@@ -905,7 +1008,24 @@ const i18n = {
     requiredFields: "Bitte Name, Land, Zutaten und Zubereitung ausfüllen.",
     exportDone: "Export erfolgreich",
     importDone: "Import erfolgreich",
-    importFailed: "Import fehlgeschlagen – ungültige JSON-Datei."
+    importFailed: "Import fehlgeschlagen – ungültige JSON-Datei.",
+    backupSingle: "Backup",
+    backupDone: "Rezept inkl. Foto gesichert ✓",
+    backupDoneNoImage: "Rezept gesichert ✓ (kein Foto hinterlegt)",
+    shoppingList: "Einkaufsliste",
+    shoppingClear: "Liste leeren",
+    shoppingTxt: "Als .txt speichern",
+    shoppingSelectAll: "Alle markieren",
+    shoppingDeselectAll: "Alle abwählen",
+    shoppingAdd: "In Einkaufsliste",
+    shoppingNothingSelected: "Bitte zuerst Zutaten ankreuzen.",
+    shoppingAddedOne: "1 Zutat in die Einkaufsliste übernommen ✓",
+    shoppingAddedMany: "{n} Zutaten in die Einkaufsliste übernommen ✓",
+    shoppingEmpty: "Die Einkaufsliste ist noch leer.",
+    shoppingEmptyHint: "Zutaten in der Detailansicht eines Rezepts ankreuzen und übernehmen.",
+    shoppingConfirmClear: "Ganze Einkaufsliste leeren?",
+    shoppingCleared: "Einkaufsliste geleert",
+    shoppingTxtDone: "Einkaufsliste als .txt gespeichert ✓"
   }
 };
 
@@ -928,8 +1048,9 @@ function applyI18n() {
  *    - Store: "recipes"
  * ----------------------------- */
 const DB_NAME = "RezepteDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2;              // v2: Store "shopping" für die Einkaufsliste
 const STORE = "recipes";
+const STORE_SHOPPING = "shopping";
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -941,47 +1062,52 @@ function openDB() {
         store.createIndex("country", "country", { unique: false });
         store.createIndex("name", "name", { unique: false });
       }
+      if (!db.objectStoreNames.contains(STORE_SHOPPING)) {
+        db.createObjectStore(STORE_SHOPPING, { keyPath: "id" });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
 
-async function dbAll() {
+// Die vier Wrapper arbeiten standardmäßig auf "recipes"; mit dem zweiten
+// Argument lassen sie sich auf den Einkaufslisten-Store umlenken.
+async function dbAll(storeName = STORE) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const req = tx.objectStore(STORE).getAll();
+    const tx = db.transaction(storeName, "readonly");
+    const req = tx.objectStore(storeName).getAll();
     req.onsuccess = () => resolve(req.result || []);
     req.onerror = () => reject(req.error);
   });
 }
 
-async function dbPut(recipe) {
+async function dbPut(recipe, storeName = STORE) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(recipe);
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).put(recipe);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-async function dbDelete(id) {
+async function dbDelete(id, storeName = STORE) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).delete(id);
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).delete(id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-async function dbClear() {
+async function dbClear(storeName = STORE) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).clear();
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).clear();
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -992,6 +1118,7 @@ async function dbClear() {
  * ----------------------------- */
 const state = {
   recipes: [],
+  shopping: [],           // Einkaufslisten-Posten (Store "shopping")
   editingId: null,
   currentDetailId: null,
   pendingDishImage: null, // DataURL des hochgeladenen Gerichtsbildes
@@ -1002,6 +1129,14 @@ const state = {
  * 4) Hilfsfunktionen
  * ----------------------------- */
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+// Zutatenfeld (eine Zutat pro Zeile) in einzelne Positionen zerlegen.
+function ingredientLines(text) {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean);
+}
 
 function fileToDataURL(file) {
   return new Promise((resolve, reject) => {
@@ -1991,6 +2126,7 @@ async function refresh() {
   renderFlagQuickFilter();
   renderCourseQuickFilter();
   renderRecipes();
+  await refreshShopping();
 }
 
 // Gänge-Schnellfilter: fixe Leiste mit den 5 Kategorien + "Alle".
@@ -2205,6 +2341,31 @@ function openDetail(id) {
       </div>`;
   }
 
+  // Zutaten als ankreuzbare Liste (Übertrag in die Einkaufsliste).
+  // Ohne verwertbare Zeilen fällt die Anzeige auf den reinen Text zurück.
+  const ingLines = ingredientLines(recipe.ingredients);
+  const ingredientsHtml = ingLines.length
+    ? `<div class="detail-section">
+         <div class="section-head">
+           <h4>${t('ingredients').replace(' *', '')}</h4>
+           <button type="button" class="btn btn-ghost spacer" id="toggleAllIngredients"></button>
+         </div>
+         <div class="ingredient-list" id="ingredientList">
+           ${ingLines.map(line => `
+             <label class="ingredient-row">
+               <input type="checkbox" data-text="${escapeHtml(line)}" />
+               <span>${escapeHtml(line)}</span>
+             </label>`).join('')}
+         </div>
+         <div class="ingredient-actions">
+           <button type="button" class="btn btn-primary" id="addToShoppingBtn">🛒 ${t('shoppingAdd')}</button>
+         </div>
+       </div>`
+    : `<div class="detail-section">
+         <h4>${t('ingredients').replace(' *', '')}</h4>
+         <div class="content">${escapeHtml(recipe.ingredients)}</div>
+       </div>`;
+
   body.insertAdjacentHTML('beforeend', `
     <div class="detail-section">
       <span class="chip">${flagFor(recipe.country)} ${escapeHtml(recipe.country)}</span>
@@ -2213,10 +2374,7 @@ function openDetail(id) {
       ${recipe.rating > 0 ? `<span class="chip"><span class="rating-display">${renderStarsHtml(recipe.rating)}</span></span>` : ''}
     </div>
     ${metaHtml}
-    <div class="detail-section">
-      <h4>${t('ingredients').replace(' *','')}</h4>
-      <div class="content">${escapeHtml(recipe.ingredients)}</div>
-    </div>
+    ${ingredientsHtml}
     <div class="detail-section">
       <h4>${t('instructions').replace(' *','')}</h4>
       <div class="content">${escapeHtml(recipe.instructions)}</div>
@@ -2224,6 +2382,31 @@ function openDetail(id) {
     ${nutritionHtml}
     ${sourceHtml}
   `);
+
+  // Zutaten-Auswahl verdrahten. Der Body wird bei jedem Öffnen neu aufgebaut,
+  // daher können die Listener hier ohne Aufräumen gesetzt werden.
+  const ingList = document.getElementById('ingredientList');
+  if (ingList) {
+    const boxes = () => Array.from(ingList.querySelectorAll('input[type="checkbox"]'));
+    const toggleBtn = document.getElementById('toggleAllIngredients');
+    const syncToggleLabel = () => {
+      const allChecked = boxes().every(b => b.checked);
+      toggleBtn.textContent = allChecked
+        ? '☐ ' + t('shoppingDeselectAll')
+        : '☑ ' + t('shoppingSelectAll');
+    };
+    toggleBtn.addEventListener('click', () => {
+      const allChecked = boxes().every(b => b.checked);
+      boxes().forEach(b => { b.checked = !allChecked; });
+      syncToggleLabel();
+    });
+    ingList.addEventListener('change', syncToggleLabel);
+    syncToggleLabel();
+
+    document.getElementById('addToShoppingBtn').addEventListener('click', () => {
+      addSelectedToShopping(recipe, boxes().filter(b => b.checked).map(b => b.dataset.text));
+    });
+  }
 
   openModal('detailModal');
 }
@@ -2292,26 +2475,209 @@ async function deleteCurrentDetail() {
 }
 
 /* -----------------------------
- * 9) Export / Import (JSON)
+ * 9) Einkaufsliste
+ *    - eigener IndexedDB-Store "shopping", überlebt das Neuladen
+ *    - Posten: { id, text, recipeId, recipeName, country, addedAt }
  * ----------------------------- */
-function exportJSON() {
-  const data = JSON.stringify(state.recipes, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
+
+// Stabile ID aus Rezept + Zutat: dieselbe Zutat zweimal zu übernehmen
+// überschreibt den vorhandenen Posten, statt ihn zu doppeln.
+function shoppingItemId(recipeId, text) {
+  return (recipeId || 'frei') + '::' + text.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+async function refreshShopping() {
+  state.shopping = (await dbAll(STORE_SHOPPING)).sort((a, b) => a.addedAt - b.addedAt);
+  updateShoppingBadge();
+}
+
+function updateShoppingBadge() {
+  const badge = document.getElementById('shoppingCount');
+  badge.textContent = state.shopping.length;
+  badge.classList.toggle('empty', state.shopping.length === 0);
+}
+
+// Angekreuzte Zutaten eines Rezepts in die Einkaufsliste übertragen.
+async function addSelectedToShopping(recipe, texts) {
+  if (!texts.length) {
+    toast(t('shoppingNothingSelected'));
+    return;
+  }
+  const now = Date.now();
+  for (let i = 0; i < texts.length; i++) {
+    await dbPut({
+      id: shoppingItemId(recipe.id, texts[i]),
+      text: texts[i],
+      recipeId: recipe.id,
+      recipeName: recipe.name,
+      country: recipe.country || '',
+      addedAt: now + i          // erhält die Reihenfolge innerhalb des Rezepts
+    }, STORE_SHOPPING);
+  }
+  await refreshShopping();
+  toast(texts.length === 1
+    ? t('shoppingAddedOne')
+    : t('shoppingAddedMany').replace('{n}', texts.length));
+}
+
+// Posten nach Rezept gruppieren – für Anzeige und .txt-Export gemeinsam genutzt.
+function groupShoppingByRecipe() {
+  const groups = [];
+  const byKey = new Map();
+  for (const item of state.shopping) {
+    const key = item.recipeId || item.recipeName;
+    if (!byKey.has(key)) {
+      const group = { name: item.recipeName || 'Ohne Rezept', country: item.country || '', items: [] };
+      byKey.set(key, group);
+      groups.push(group);
+    }
+    byKey.get(key).items.push(item);
+  }
+  return groups;
+}
+
+function renderShoppingList() {
+  const body = document.getElementById('shoppingBody');
+  body.innerHTML = '';
+
+  if (!state.shopping.length) {
+    body.innerHTML = `
+      <div class="empty-state">
+        <div class="emoji">🛒</div>
+        <h3>${t('shoppingEmpty')}</h3>
+        <p>${t('shoppingEmptyHint')}</p>
+      </div>`;
+    return;
+  }
+
+  for (const group of groupShoppingByRecipe()) {
+    const section = document.createElement('div');
+    section.className = 'shopping-group';
+    section.innerHTML = `<h4>${flagFor(group.country)} ${escapeHtml(group.name)}</h4>`;
+
+    for (const item of group.items) {
+      const row = document.createElement('div');
+      row.className = 'shopping-item';
+      row.innerHTML = `<span>${escapeHtml(item.text)}</span>`;
+
+      const del = document.createElement('button');
+      del.textContent = '✕';
+      del.title = 'Position entfernen';
+      del.addEventListener('click', async () => {
+        await dbDelete(item.id, STORE_SHOPPING);
+        await refreshShopping();
+        renderShoppingList();
+      });
+
+      row.appendChild(del);
+      section.appendChild(row);
+    }
+    body.appendChild(section);
+  }
+}
+
+function openShoppingList() {
+  renderShoppingList();
+  openModal('shoppingModal');
+}
+
+async function clearShoppingList() {
+  if (!state.shopping.length) return;
+  if (!confirm(t('shoppingConfirmClear'))) return;
+  await dbClear(STORE_SHOPPING);
+  await refreshShopping();
+  renderShoppingList();
+  toast(t('shoppingCleared'));
+}
+
+// Einkaufsliste als Textdatei: nach Rezept gruppiert, mit Kästchen zum Abhaken.
+function buildShoppingTxt() {
+  const datum = new Date().toLocaleDateString('de-DE',
+    { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const title = 'Einkaufsliste – ' + datum;
+  const lines = [title, '='.repeat(title.length), ''];
+
+  for (const group of groupShoppingByRecipe()) {
+    lines.push(group.country ? `${group.name} (${group.country})` : group.name);
+    group.items.forEach(item => lines.push('  [ ] ' + item.text));
+    lines.push('');
+  }
+  // CRLF, damit die Datei auch im Windows-Editor sauber umbricht.
+  return lines.join('\r\n');
+}
+
+function exportShoppingTxt() {
+  if (!state.shopping.length) {
+    toast(t('shoppingEmpty'));
+    return;
+  }
+  // BOM voranstellen, damit Umlaute in Windows-Editoren korrekt ankommen.
+  downloadFile('\uFEFF' + buildShoppingTxt(),
+    'einkaufsliste-' + new Date().toISOString().slice(0, 10) + '.txt',
+    'text/plain;charset=utf-8');
+  toast(t('shoppingTxtDone'));
+}
+
+/* -----------------------------
+ * 10) Export / Import (JSON)
+ * ----------------------------- */
+// Schreibt beliebigen Text als Datei in den Download-Ordner.
+function downloadFile(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'rezepte-export-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// Schreibt eine Rezept-Liste als JSON-Datei in den Download-Ordner.
+function downloadRecipesAsJSON(recipes, filename) {
+  downloadFile(JSON.stringify(recipes, null, 2), filename, 'application/json');
+}
+
+// Dateinamen-tauglicher Name aus dem Rezepttitel (Umlaute ausgeschrieben).
+function slugify(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'rezept';
+}
+
+function exportJSON() {
+  downloadRecipesAsJSON(
+    state.recipes,
+    'rezepte-export-' + new Date().toISOString().slice(0, 10) + '.json'
+  );
   toast(t('exportDone'));
+}
+
+// Einzelnes Rezept sichern/weitergeben. Das Foto liegt bereits als DataURL im
+// Datensatz und ist damit automatisch Teil der Datei. Geschrieben wird ein
+// Array mit einem Element – so lässt sich die Datei über den normalen Import
+// beim Empfänger wieder einlesen.
+function exportSingleJSON(id) {
+  const recipe = state.recipes.find(r => r.id === id);
+  if (!recipe) return;
+  downloadRecipesAsJSON(
+    [recipe],
+    'rezept-' + slugify(recipe.name) + '-' + new Date().toISOString().slice(0, 10) + '.json'
+  );
+  toast(recipe.image ? t('backupDone') : t('backupDoneNoImage'));
 }
 
 async function importJSON(file) {
   try {
     const text = await file.text();
     const data = JSON.parse(text);
-    if (!Array.isArray(data)) throw new Error('Not an array');
-    for (const r of data) {
+    // Sowohl Sammel-Exporte (Array) als auch ein einzeln gesichertes Rezept
+    // (Objekt) werden akzeptiert.
+    const list = Array.isArray(data) ? data : [data];
+    if (!list.length || typeof list[0] !== 'object') throw new Error('Kein Rezept-JSON');
+    for (const r of list) {
       // Minimale Validierung + fehlende IDs ergänzen
       if (!r.name || !r.country) continue;
       if (!r.id) r.id = uid();
@@ -2326,7 +2692,7 @@ async function importJSON(file) {
 }
 
 /* -----------------------------
- * 10) Drag & Drop + File-Inputs
+ * 11) Drag & Drop + File-Inputs
  * ----------------------------- */
 function setupDropZone(zoneId, inputId, handler) {
   const zone = document.getElementById(zoneId);
@@ -2358,7 +2724,7 @@ function setupDropZone(zoneId, inputId, handler) {
 }
 
 /* -----------------------------
- * 11) Event-Bindings
+ * 12) Event-Bindings
  * ----------------------------- */
 document.addEventListener('DOMContentLoaded', async () => {
   applyI18n();
@@ -2388,6 +2754,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Löschen
   document.getElementById('deleteRecipeBtn').addEventListener('click', deleteCurrentDetail);
+
+  // Einzelnes Rezept sichern (aus Detail)
+  document.getElementById('backupRecipeBtn').addEventListener('click', () => {
+    exportSingleJSON(state.currentDetailId);
+  });
+
+  // Einkaufsliste
+  document.getElementById('shoppingBtn').addEventListener('click', openShoppingList);
+  document.getElementById('shoppingClearBtn').addEventListener('click', clearShoppingList);
+  document.getElementById('shoppingTxtBtn').addEventListener('click', exportShoppingTxt);
 
   // Suche & Filter
   const searchInputEl = document.getElementById('searchInput');
