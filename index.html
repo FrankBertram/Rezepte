@@ -1011,6 +1011,7 @@
     <div class="modal-body" id="shoppingBody"></div>
     <div class="modal-footer">
       <button class="btn btn-danger" id="shoppingClearBtn">🗑️ <span data-i18n="shoppingClear">Liste leeren</span></button>
+      <button class="btn" id="shoppingRemindersBtn">🍎 <span data-i18n="shoppingToShortcut">An Kurzbefehl</span></button>
       <button class="btn btn-primary" id="shoppingTxtBtn">📄 <span data-i18n="shoppingTxt">Als .txt speichern</span></button>
     </div>
   </div>
@@ -1084,6 +1085,11 @@ const i18n = {
     shoppingList: "Einkaufsliste",
     shoppingClear: "Liste leeren",
     shoppingTxt: "Als .txt speichern",
+    shoppingToShortcut: "An Kurzbefehl",
+    shoppingRemindersHint: "Übergibt die offenen Positionen an den Kurzbefehl „Einkaufsliste\" – je nach Aufbau landen sie in Apple Erinnerungen (und damit auf der Apple Watch) oder in einer Einkaufs-App wie Bring!.",
+    shoppingNothingOpen: "Keine offenen Positionen zum Übertragen.",
+    shoppingCopied: "Liste in die Zwischenablage kopiert ✓",
+    shoppingCopyFailed: "Kopieren nicht möglich – bitte den .txt-Export nutzen.",
     shoppingSelectAll: "Alle markieren",
     shoppingSelectAllHint: "Markiert Zutaten mit Mengenangabe – Vorratsartikel (Gewürze, Öl, Essig) und Einträge ohne Menge bleiben frei.",
     shoppingDeselectAll: "Alle abwählen",
@@ -2848,6 +2854,45 @@ async function clearShoppingList() {
   toast(t('shoppingCleared'));
 }
 
+/* --- Übergabe an Apple Erinnerungen (und damit an die Apple Watch) ---------
+   Der Absprung läuft über einen Kurzbefehl, den der Nutzer einmalig anlegt
+   (Anleitung im README). Er bekommt die offenen Positionen als Text, eine je
+   Zeile, und legt daraus Erinnerungen in einer iCloud-Liste an. Nur iCloud-
+   Listen erscheinen auf der Watch. */
+const REMINDERS_SHORTCUT = 'Einkaufsliste';
+
+// Offene Positionen als schlichte Textliste (eine Position pro Zeile).
+function buildShoppingPlainList() {
+  return sortedShoppingTiles().filter(g => !g.done).map(g => g.label).join('\n');
+}
+
+// Absprung gekapselt, damit er sich einzeln prüfen lässt.
+function openExternal(url) { window.location.href = url; }
+
+function isAppleDevice() {
+  return /iPhone|iPad|iPod|Macintosh/i.test(navigator.userAgent || '');
+}
+
+async function sendShoppingToReminders() {
+  const text = buildShoppingPlainList();
+  if (!text) {
+    toast(t('shoppingNothingOpen'));
+    return;
+  }
+  if (isAppleDevice()) {
+    openExternal('shortcuts://run-shortcut?name=' + encodeURIComponent(REMINDERS_SHORTCUT) +
+                 '&input=text&text=' + encodeURIComponent(text));
+    return;
+  }
+  // Ohne Kurzbefehle-App bleibt der Weg über die Zwischenablage.
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(t('shoppingCopied'));
+  } catch (_) {
+    toast(t('shoppingCopyFailed'));
+  }
+}
+
 // Einkaufsliste als Textdatei: nach Rezept gruppiert, mit Kästchen zum Abhaken.
 function buildShoppingTxt() {
   const datum = new Date().toLocaleDateString('de-DE',
@@ -3023,6 +3068,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('shoppingBtn').addEventListener('click', openShoppingList);
   document.getElementById('shoppingClearBtn').addEventListener('click', clearShoppingList);
   document.getElementById('shoppingTxtBtn').addEventListener('click', exportShoppingTxt);
+  const remindersBtn = document.getElementById('shoppingRemindersBtn');
+  remindersBtn.title = t('shoppingRemindersHint');
+  remindersBtn.addEventListener('click', sendShoppingToReminders);
 
   // Suche & Filter
   const searchInputEl = document.getElementById('searchInput');
