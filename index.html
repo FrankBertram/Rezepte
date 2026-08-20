@@ -1011,6 +1011,7 @@
     <div class="modal-body" id="shoppingBody"></div>
     <div class="modal-footer">
       <button class="btn btn-danger" id="shoppingClearBtn">🗑️ <span data-i18n="shoppingClear">Liste leeren</span></button>
+      <button class="btn" id="shoppingCopyBtn">📋 <span data-i18n="shoppingCopy">Kopieren</span></button>
       <button class="btn" id="shoppingRemindersBtn">🍎 <span data-i18n="shoppingToShortcut">An Kurzbefehl</span></button>
       <button class="btn btn-primary" id="shoppingTxtBtn">📄 <span data-i18n="shoppingTxt">Als .txt speichern</span></button>
     </div>
@@ -1086,6 +1087,8 @@ const i18n = {
     shoppingClear: "Liste leeren",
     shoppingTxt: "Als .txt speichern",
     shoppingToShortcut: "An Kurzbefehl",
+    shoppingCopy: "Kopieren",
+    shoppingCopyHint: "Offene Positionen als Textliste kopieren – zum Einfügen in Erinnerungen, Bring! oder eine Notiz.",
     shoppingRemindersHint: "Übergibt die offenen Positionen an den Kurzbefehl „Einkaufsliste\" – je nach Aufbau landen sie in Apple Erinnerungen (und damit auf der Apple Watch) oder in einer Einkaufs-App wie Bring!.",
     shoppingNothingOpen: "Keine offenen Positionen zum Übertragen.",
     shoppingCopied: "Liste in die Zwischenablage kopiert ✓",
@@ -2873,6 +2876,39 @@ function isAppleDevice() {
   return /iPhone|iPad|iPod|Macintosh/i.test(navigator.userAgent || '');
 }
 
+// Kopieren mit Rückfallebene: navigator.clipboard gibt es nur über https bzw.
+// localhost, per Doppelklick geöffnet (file://) greift execCommand.
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (_) { /* weiter mit Rückfallebene */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Kurzbefehlfreier Weg: Liste kopieren und z.B. in Erinnerungen oder Bring!
+// einfügen.
+async function copyShoppingList() {
+  const text = buildShoppingPlainList();
+  if (!text) {
+    toast(t('shoppingNothingOpen'));
+    return;
+  }
+  toast(await copyToClipboard(text) ? t('shoppingCopied') : t('shoppingCopyFailed'));
+}
+
 async function sendShoppingToReminders() {
   const text = buildShoppingPlainList();
   if (!text) {
@@ -2880,17 +2916,15 @@ async function sendShoppingToReminders() {
     return;
   }
   if (isAppleDevice()) {
+    // Zusätzlich in die Zwischenablage legen: so funktioniert der Kurzbefehl
+    // sowohl mit "Kurzbefehl-Eingabe" als auch mit "Zwischenablage" als Quelle.
+    await copyToClipboard(text);
     openExternal('shortcuts://run-shortcut?name=' + encodeURIComponent(REMINDERS_SHORTCUT) +
                  '&input=text&text=' + encodeURIComponent(text));
     return;
   }
   // Ohne Kurzbefehle-App bleibt der Weg über die Zwischenablage.
-  try {
-    await navigator.clipboard.writeText(text);
-    toast(t('shoppingCopied'));
-  } catch (_) {
-    toast(t('shoppingCopyFailed'));
-  }
+  toast(await copyToClipboard(text) ? t('shoppingCopied') : t('shoppingCopyFailed'));
 }
 
 // Einkaufsliste als Textdatei: nach Rezept gruppiert, mit Kästchen zum Abhaken.
@@ -3071,6 +3105,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const remindersBtn = document.getElementById('shoppingRemindersBtn');
   remindersBtn.title = t('shoppingRemindersHint');
   remindersBtn.addEventListener('click', sendShoppingToReminders);
+  const copyBtn = document.getElementById('shoppingCopyBtn');
+  copyBtn.title = t('shoppingCopyHint');
+  copyBtn.addEventListener('click', copyShoppingList);
 
   // Suche & Filter
   const searchInputEl = document.getElementById('searchInput');
